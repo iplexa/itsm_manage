@@ -1,14 +1,21 @@
+import json
+
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
+from sse_starlette.sse import EventSourceResponse
 
+from app.db.models import BatchStatus
 from app.db.session import get_session
 from app.schemas.batch import BatchCreate, BatchDetail, BatchRead, BatchUpdate
 from app.schemas.run import BatchRunResponse
-from app.services.batch_run import start_batch_run
 from app.services import crud
+from app.services.batch_run import start_batch_run
+from app.services.redis_pubsub import stream_batch_events
 from app.worker.batch_runner import run_batch
 
 router = APIRouter(prefix="/batches", tags=["batches"])
+
+_TERMINAL_STATUSES = {BatchStatus.done, BatchStatus.failed}
 
 
 @router.get("", response_model=list[BatchRead])
@@ -82,6 +89,59 @@ async def run_batch_endpoint(
 
     run_batch.delay(batch.id)
     return BatchRunResponse(status="started", batch_id=batch.id)
+
+
+@router.get("/{batch_id}/stream")
+async def stream_batch_progress(
+    batch_id: int,
+    session: AsyncSession = Depends(get_session),
+) -> EventSourceResponse:
+    """
+    SSE-поток прогресса батча.
+
+    События:
+    - init        — начальное состояние батча (BatchDetail JSON)
+    - task_update — изменение статуса задачи
+    - batch_done  — батч завершён (done или failed)
+    - ping        — heartbeat каждые 15 с без событий
+    """
+    try:
+        batch = await crud.get_batch(session, batch_id, with_tasks=True)
+    except crud.NotFoundError as error:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(error)) from error
+
+    tasks = sorted(batch.tasks, key=lambda t: (t.sort_order, t.id))
+    init_data = BatchDetail.model_validate(batch).model_dump()
+    init_data["tasks"] = [t.__dict__ for t in tasks]
+    init_data["tasks_count"] = len(tasks)
+
+    already_terminal = batch.status in _TERMINAL_STATUSES
+
+    async def generate():
+        yield {
+            "event": "init",
+            "data": json.dumps(init_data, default=str, ensure_ascii=False),
+        }
+
+        if already_terminal:
+            return
+
+        async for event in stream_batch_events(batch_id):
+            event_type = event.get("type", "message")
+
+            if event_type == "ping":
+                yield {"event": "ping", "data": ""}
+                continue
+
+            yield {
+                "event": event_type,
+                "data": json.dumps(event, ensure_ascii=False),
+            }
+
+            if event_type == "batch_done":
+                break
+
+    return EventSourceResponse(generate())
 
 
 def to_batch_read(batch: object, tasks_count: int = 0) -> BatchRead:

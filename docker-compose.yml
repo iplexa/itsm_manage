@@ -37,6 +37,10 @@ services:
       CELERY_BROKER_URL: redis://redis:6379/1
       CELERY_RESULT_BACKEND: redis://redis:6379/2
       ITSM_BASE_URL: https://help.ranepa.ru
+      BEARER_TOKEN: ${BEARER_TOKEN:-}
+      COOKIES: ${COOKIES:-}
+      ASSIGNED_USER: ${ASSIGNED_USER:-}
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
       DEEPSEEK_BASE_URL: https://api.deepseek.com
       DEEPSEEK_MODEL: deepseek-chat
       FRONTEND_API_URL: http://localhost:8000
@@ -59,6 +63,11 @@ services:
       REDIS_URL: redis://redis:6379/0
       CELERY_BROKER_URL: redis://redis:6379/1
       CELERY_RESULT_BACKEND: redis://redis:6379/2
+      ITSM_BASE_URL: https://help.ranepa.ru
+      BEARER_TOKEN: ${BEARER_TOKEN:-}
+      COOKIES: ${COOKIES:-}
+      ASSIGNED_USER: ${ASSIGNED_USER:-}
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
     depends_on:
       postgres:
         condition: service_healthy
