@@ -1,16 +1,15 @@
-function App() {
+import { Routes, Route, Navigate } from "react-router-dom";
+import BatchList from "./pages/BatchList";
+import BatchEditor from "./pages/BatchEditor";
+import RunProgress from "./pages/RunProgress";
+
+export default function App() {
   return (
-    <main className="app-shell">
-      <section className="status-panel">
-        <p className="eyebrow">ITSM Manage</p>
-        <h1>Каркас приложения готов</h1>
-        <p>
-          Frontend запущен. В следующих фазах здесь появятся список батчей,
-          редактор задач и экран прогресса запуска.
-        </p>
-      </section>
-    </main>
+    <Routes>
+      <Route path="/" element={<BatchList />} />
+      <Route path="/batches/:id" element={<BatchEditor />} />
+      <Route path="/batches/:id/run" element={<RunProgress />} />
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
   );
 }
-
-export default App;
