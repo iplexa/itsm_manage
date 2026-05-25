@@ -3,7 +3,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_session
 from app.schemas.batch import BatchCreate, BatchDetail, BatchRead, BatchUpdate
+from app.schemas.run import BatchRunResponse
+from app.services.batch_run import start_batch_run
 from app.services import crud
+from app.worker.batch_runner import run_batch
 
 router = APIRouter(prefix="/batches", tags=["batches"])
 
@@ -63,6 +66,22 @@ async def delete_batch(
     except crud.NotFoundError as error:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(error)) from error
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post("/{batch_id}/run", response_model=BatchRunResponse)
+async def run_batch_endpoint(
+    batch_id: int,
+    session: AsyncSession = Depends(get_session),
+) -> BatchRunResponse:
+    try:
+        batch = await start_batch_run(session, batch_id)
+    except crud.NotFoundError as error:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(error)) from error
+    except crud.BatchIsRunningError as error:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(error)) from error
+
+    run_batch.delay(batch.id)
+    return BatchRunResponse(status="started", batch_id=batch.id)
 
 
 def to_batch_read(batch: object, tasks_count: int = 0) -> BatchRead:

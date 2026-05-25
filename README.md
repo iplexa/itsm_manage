@@ -10,6 +10,8 @@
 
 Фаза 4 добавляет генерацию задач из шаблонов через endpoint `POST /api/import/template`.
 
+Фаза 5 добавляет запуск батча через Celery: `POST /api/batches/{batch_id}/run`.
+
 ## Требования
 
 - Docker
@@ -64,6 +66,20 @@ DELETE /api/batches/{batch_id}/tasks/{task_id}
 ```
 
 Если батч находится в статусе `running`, изменение задач возвращает `409 Conflict`.
+
+Запуск батча:
+
+```http
+POST /api/batches/{batch_id}/run
+```
+
+Ответ:
+
+```json
+{"status":"started","batch_id":1}
+```
+
+Endpoint переводит батч в `running`, задачи в `pending` и ставит Celery-задачу `run_batch`.
 
 ## Template import
 
