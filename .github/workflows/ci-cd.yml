@@ -1,0 +1,91 @@
+name: CI/CD
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+
+concurrency:
+  group: itsm-manage-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ci:
+    name: Проверка сборки
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Проверить Docker Compose
+        run: docker compose config
+
+      - name: Проверить Python syntax
+        run: |
+          python -m compileall -q backend/app backend/alembic
+
+      - name: Собрать backend image
+        run: docker compose build backend celery_worker
+
+      - name: Проверить frontend production build
+        run: docker build --target build ./frontend
+
+  deploy:
+    name: Deploy на сервер
+    runs-on: ubuntu-latest
+    needs: ci
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Настроить SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}
+          SSH_HOST: ${{ secrets.DEPLOY_HOST }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "$SSH_HOST" >> ~/.ssh/known_hosts
+
+      - name: Загрузить код на сервер
+        env:
+          SSH_HOST: ${{ secrets.DEPLOY_HOST }}
+          SSH_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PATH: ${{ vars.DEPLOY_PATH || '/opt/itsm_manage' }}
+        run: |
+          ssh -i ~/.ssh/deploy_key "$SSH_USER@$SSH_HOST" "mkdir -p '$DEPLOY_PATH'"
+          tar \
+            --exclude=.git \
+            --exclude=.env \
+            --exclude=__pycache__ \
+            --exclude=node_modules \
+            --exclude=dist \
+            -czf - . \
+            | ssh -i ~/.ssh/deploy_key "$SSH_USER@$SSH_HOST" "tar -xzf - -C '$DEPLOY_PATH'"
+
+      - name: Запустить Docker Compose
+        env:
+          SSH_HOST: ${{ secrets.DEPLOY_HOST }}
+          SSH_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PATH: ${{ vars.DEPLOY_PATH || '/opt/itsm_manage' }}
+        run: |
+          ssh -i ~/.ssh/deploy_key "$SSH_USER@$SSH_HOST" "
+            set -e
+            cd '$DEPLOY_PATH'
+            if [ ! -f .env ]; then
+              cp .env.example .env
+            fi
+            grep -q '^BACKEND_PORT=' .env || printf '\nBACKEND_PORT=18000\n' >> .env
+            grep -q '^FRONTEND_PORT=' .env || printf 'FRONTEND_PORT=15173\n' >> .env
+            grep -q '^POSTGRES_PORT=' .env || printf 'POSTGRES_PORT=15432\n' >> .env
+            grep -q '^REDIS_PORT=' .env || printf 'REDIS_PORT=16379\n' >> .env
+            docker compose up -d --build --remove-orphans
+            curl -fsS http://localhost:18000/health
+          "
