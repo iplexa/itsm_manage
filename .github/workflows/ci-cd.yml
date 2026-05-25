@@ -31,6 +31,9 @@ jobs:
       - name: Собрать backend image
         run: docker compose build backend celery_worker
 
+      - name: Запустить backend unit tests
+        run: docker compose run --rm --no-deps backend python -m unittest discover tests
+
       - name: Проверить frontend production build
         run: docker build --target build ./frontend
 

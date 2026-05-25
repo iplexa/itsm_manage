@@ -6,6 +6,8 @@
 
 Фаза 2 добавляет CRUD API для батчей и задач.
 
+Фаза 3 добавляет async ITSM client service для создания, назначения, списания времени, закрытия и получения заявок из ITSM.
+
 ## Требования
 
 - Docker
@@ -60,6 +62,12 @@ DELETE /api/batches/{batch_id}/tasks/{task_id}
 ```
 
 Если батч находится в статусе `running`, изменение задач возвращает `409 Conflict`.
+
+## Backend tests
+
+```bash
+docker compose run --rm --no-deps backend python -m unittest discover tests
+```
 
 ## Миграции
 
