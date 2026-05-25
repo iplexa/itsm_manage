@@ -8,6 +8,8 @@
 
 Фаза 3 добавляет async ITSM client service для создания, назначения, списания времени, закрытия и получения заявок из ITSM.
 
+Фаза 4 добавляет генерацию задач из шаблонов через endpoint `POST /api/import/template`.
+
 ## Требования
 
 - Docker
@@ -62,6 +64,27 @@ DELETE /api/batches/{batch_id}/tasks/{task_id}
 ```
 
 Если батч находится в статусе `running`, изменение задач возвращает `409 Conflict`.
+
+## Template import
+
+```http
+POST /api/import/template
+```
+
+Пример:
+
+```json
+{
+  "template": "vks",
+  "params": {
+    "audience": "П/2 305",
+    "date_start": "2026-03-05T19:00:00",
+    "date_end": "2026-03-05T22:00:00"
+  }
+}
+```
+
+Поддерживаемые шаблоны: `rooms1`, `rooms2`, `iu_tasks`, `vks`, `mount`, `modpc`, `regworks`.
 
 ## Backend tests
 
