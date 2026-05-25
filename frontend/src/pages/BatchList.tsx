@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus, Trash2, ChevronRight } from "lucide-react";
+import { Plus, Trash2, ChevronRight, Settings } from "lucide-react";
 import { fetchBatches, createBatch, deleteBatch } from "../api/batches";
 import StatusBadge from "../components/StatusBadge";
 import type { BatchRead, BatchStatus } from "../types/batch";
@@ -67,13 +67,22 @@ export default function BatchList() {
       {/* Header */}
       <header className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
         <h1 className="text-lg font-semibold text-gray-900">ITSM Manage</h1>
-        <button
-          onClick={() => setCreating(true)}
-          className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
-        >
-          <Plus size={15} />
-          Новый батч
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => navigate("/config")}
+            className="p-2 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+            title="Конфигурация"
+          >
+            <Settings size={16} />
+          </button>
+          <button
+            onClick={() => setCreating(true)}
+            className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
+          >
+            <Plus size={15} />
+            Новый батч
+          </button>
+        </div>
       </header>
 
       <main className="max-w-4xl mx-auto px-6 py-6">

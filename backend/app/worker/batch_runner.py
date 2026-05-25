@@ -21,11 +21,16 @@ def ping() -> str:
 
 
 @celery_app.task(name="app.worker.batch_runner.run_batch")
-def run_batch(batch_id: int, stop_on_error: bool = True) -> dict[str, Any]:
-    return asyncio.run(run_batch_async(batch_id, stop_on_error=stop_on_error))
+def run_batch(batch_id: int, stop_on_error: bool = True, dry_run: bool = False) -> dict[str, Any]:
+    return asyncio.run(run_batch_async(batch_id, stop_on_error=stop_on_error, dry_run=dry_run))
 
 
-async def run_batch_async(batch_id: int, *, stop_on_error: bool = True) -> dict[str, Any]:
+async def run_batch_async(
+    batch_id: int,
+    *,
+    stop_on_error: bool = True,
+    dry_run: bool = False,
+) -> dict[str, Any]:
     async with async_session_maker() as session:
         batch = await get_batch(session, batch_id)
         if batch is None:
@@ -44,20 +49,27 @@ async def run_batch_async(batch_id: int, *, stop_on_error: bool = True) -> dict[
         failed_count = 0
 
         for task in tasks:
-            if task.status == BatchTaskStatus.skipped:
+            if task.status in (BatchTaskStatus.skipped, BatchTaskStatus.done):
                 continue
 
             await _set_task_status(session, task, BatchTaskStatus.running, error=None)
             await publish(batch_id, _task_event(task, BatchTaskStatus.running))
 
             try:
-                request_id = await client.create_request(task)
-                task.itsm_request_id = request_id
-                await session.commit()
+                if dry_run:
+                    import asyncio as _asyncio
+                    await _asyncio.sleep(0.3)
+                    request_id = f"DRY-RUN-{task.id}"
+                    task.itsm_request_id = request_id
+                    await session.commit()
+                else:
+                    request_id = await client.create_request(task)
+                    task.itsm_request_id = request_id
+                    await session.commit()
 
-                await client.assign_request(request_id)
-                await client.log_time(request_id, task.time_minutes, task.closure_text)
-                await client.close_request(request_id, task.closure_text, task.closure_date)
+                    await client.assign_request(request_id)
+                    await client.log_time(request_id, task.time_minutes, task.closure_text)
+                    await client.close_request(request_id, task.closure_text, task.closure_date)
 
                 await _set_task_status(session, task, BatchTaskStatus.done, error=None)
                 await publish(batch_id, _task_event(task, BatchTaskStatus.done))

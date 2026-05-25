@@ -2,6 +2,7 @@ import { Routes, Route, Navigate } from "react-router-dom";
 import BatchList from "./pages/BatchList";
 import BatchEditor from "./pages/BatchEditor";
 import RunProgress from "./pages/RunProgress";
+import Config from "./pages/Config";
 
 export default function App() {
   return (
@@ -9,6 +10,7 @@ export default function App() {
       <Route path="/" element={<BatchList />} />
       <Route path="/batches/:id" element={<BatchEditor />} />
       <Route path="/batches/:id/run" element={<RunProgress />} />
+      <Route path="/config" element={<Config />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

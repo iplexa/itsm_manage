@@ -20,6 +20,10 @@ export const deleteBatch = async (id: number): Promise<void> => {
   await api.delete(`/batches/${id}`);
 };
 
-export const runBatch = async (id: number): Promise<void> => {
-  await api.post(`/batches/${id}/run`);
+export const runBatch = async (
+  id: number,
+  dryRun = false,
+  stopOnError = true,
+): Promise<void> => {
+  await api.post(`/batches/${id}/run`, { dry_run: dryRun, stop_on_error: stopOnError });
 };

@@ -19,6 +19,8 @@ async def start_batch_run(session: AsyncSession, batch_id: int) -> Batch:
 
     tasks = await get_batch_tasks_for_run(session, batch_id)
     for task in tasks:
+        if task.status in (BatchTaskStatus.done, BatchTaskStatus.skipped):
+            continue
         task.status = BatchTaskStatus.pending
         task.error = None
         task.itsm_request_id = None

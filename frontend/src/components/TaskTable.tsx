@@ -1,4 +1,4 @@
-import { Trash2 } from "lucide-react";
+import { Trash2, RotateCcw, SkipForward } from "lucide-react";
 import type { TaskRead } from "../types/task";
 import StatusBadge from "./StatusBadge";
 
@@ -26,10 +26,12 @@ interface Props {
   tasks: TaskRead[];
   showStatus?: boolean;
   onDelete?: (taskId: number) => void;
+  onRetry?: (taskId: number) => void;
+  onSkip?: (taskId: number) => void;
   streamStatuses?: Map<number, { status: string; itsm_request_id: string | null; error: string | null }>;
 }
 
-export default function TaskTable({ tasks, showStatus, onDelete, streamStatuses }: Props) {
+export default function TaskTable({ tasks, showStatus, onDelete, onRetry, onSkip, streamStatuses }: Props) {
   if (tasks.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-16 text-gray-400">
@@ -49,7 +51,7 @@ export default function TaskTable({ tasks, showStatus, onDelete, streamStatuses 
             <th className="py-2 pr-3 font-medium w-16 text-right">Мин</th>
             <th className="py-2 pr-3 font-medium w-32">Дата закрытия</th>
             {showStatus && <th className="py-2 pr-3 font-medium w-28">Статус</th>}
-            {onDelete && <th className="py-2 w-8" />}
+            {(onDelete || onRetry || onSkip) && <th className="py-2 w-20" />}
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-100">
@@ -96,14 +98,37 @@ export default function TaskTable({ tasks, showStatus, onDelete, streamStatuses 
                     <StatusBadge status={status} type="task" />
                   </td>
                 )}
-                {onDelete && (
+                {(onDelete || onRetry || onSkip) && (
                   <td className="py-2.5">
-                    <button
-                      onClick={() => onDelete(task.id)}
-                      className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-red-50 text-gray-400 hover:text-red-500 transition-all"
-                    >
-                      <Trash2 size={14} />
-                    </button>
+                    <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-all">
+                      {onRetry && status === "failed" && (
+                        <button
+                          onClick={() => onRetry(task.id)}
+                          title="Повторить"
+                          className="p-1 rounded hover:bg-blue-50 text-gray-400 hover:text-blue-600"
+                        >
+                          <RotateCcw size={13} />
+                        </button>
+                      )}
+                      {onSkip && status !== "done" && status !== "skipped" && (
+                        <button
+                          onClick={() => onSkip(task.id)}
+                          title="Пропустить"
+                          className="p-1 rounded hover:bg-yellow-50 text-gray-400 hover:text-yellow-600"
+                        >
+                          <SkipForward size={13} />
+                        </button>
+                      )}
+                      {onDelete && (
+                        <button
+                          onClick={() => onDelete(task.id)}
+                          title="Удалить"
+                          className="p-1 rounded hover:bg-red-50 text-gray-400 hover:text-red-500"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      )}
+                    </div>
                   </td>
                 )}
               </tr>

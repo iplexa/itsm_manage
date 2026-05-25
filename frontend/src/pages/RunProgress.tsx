@@ -1,7 +1,8 @@
 import { useNavigate, useParams } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, CheckCircle2, XCircle, Clock, Loader2 } from "lucide-react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { ArrowLeft, CheckCircle2, XCircle, Clock, Loader2, RotateCcw, SkipForward } from "lucide-react";
 import { fetchBatch } from "../api/batches";
+import { retryTask, skipTask } from "../api/tasks";
 import { useBatchStream } from "../hooks/useBatchStream";
 import StatusBadge from "../components/StatusBadge";
 import type { TaskRead } from "../types/task";
@@ -20,6 +21,7 @@ export default function RunProgress() {
   const { id } = useParams<{ id: string }>();
   const batchId = Number(id);
   const navigate = useNavigate();
+  const qc = useQueryClient();
 
   const { data: batch, isLoading } = useQuery({
     queryKey: ["batch", batchId],
@@ -27,6 +29,16 @@ export default function RunProgress() {
   });
 
   const { taskEvents, batchDone, connected } = useBatchStream(batchId);
+
+  const retryMut = useMutation({
+    mutationFn: (taskId: number) => retryTask(batchId, taskId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["batch", batchId] }),
+  });
+
+  const skipMut = useMutation({
+    mutationFn: (taskId: number) => skipTask(batchId, taskId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["batch", batchId] }),
+  });
 
   if (isLoading || !batch) {
     return (
@@ -51,6 +63,7 @@ export default function RunProgress() {
   }).length;
 
   const finalStatus = batchDone?.status ?? batch.status;
+  const isFinished = batchDone || ["done", "failed"].includes(batch.status);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -82,7 +95,7 @@ export default function RunProgress() {
           </p>
         </div>
 
-        {(batchDone || ["done", "failed"].includes(batch.status)) && (
+        {isFinished && (
           <button
             onClick={() => navigate("/")}
             className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50"
@@ -128,6 +141,8 @@ export default function RunProgress() {
           const status = live?.status ?? task.status;
           const reqId = live?.itsm_request_id ?? task.itsm_request_id;
           const error = live?.error ?? task.error;
+          const canRetry = isFinished && status === "failed";
+          const canSkip = isFinished && status !== "done" && status !== "skipped";
 
           return (
             <div
@@ -164,9 +179,31 @@ export default function RunProgress() {
                 )}
               </div>
 
-              <span className="text-xs text-gray-400 shrink-0">
-                {task.time_minutes} мин
-              </span>
+              <div className="flex items-center gap-1 shrink-0">
+                <span className="text-xs text-gray-400">
+                  {task.time_minutes} мин
+                </span>
+                {canRetry && (
+                  <button
+                    onClick={() => retryMut.mutate(task.id)}
+                    disabled={retryMut.isPending}
+                    title="Повторить"
+                    className="ml-1 p-1 rounded hover:bg-blue-50 text-gray-400 hover:text-blue-600 transition-colors"
+                  >
+                    <RotateCcw size={13} />
+                  </button>
+                )}
+                {canSkip && (
+                  <button
+                    onClick={() => skipMut.mutate(task.id)}
+                    disabled={skipMut.isPending}
+                    title="Пропустить"
+                    className="p-1 rounded hover:bg-yellow-50 text-gray-400 hover:text-yellow-600 transition-colors"
+                  >
+                    <SkipForward size={13} />
+                  </button>
+                )}
+              </div>
             </div>
           );
         })}

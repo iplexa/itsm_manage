@@ -15,3 +15,11 @@ export const deleteTask = async (
 ): Promise<void> => {
   await api.delete(`/batches/${batchId}/tasks/${taskId}`);
 };
+
+export const retryTask = async (batchId: number, taskId: number): Promise<void> => {
+  await api.post(`/batches/${batchId}/tasks/${taskId}/retry`);
+};
+
+export const skipTask = async (batchId: number, taskId: number): Promise<void> => {
+  await api.post(`/batches/${batchId}/tasks/${taskId}/skip`);
+};

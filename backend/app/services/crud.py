@@ -2,7 +2,7 @@ from sqlalchemy import Select, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.db.models import Batch, BatchStatus, BatchTask
+from app.db.models import Batch, BatchStatus, BatchTask, BatchTaskStatus
 from app.schemas.batch import BatchCreate, BatchUpdate
 from app.schemas.task import TaskCreate, TaskUpdate
 
@@ -130,6 +130,29 @@ async def get_next_task_sort_order(session: AsyncSession, batch_id: int) -> int:
     )
     result = await session.execute(stmt)
     return int(result.scalar_one())
+
+
+async def retry_task(session: AsyncSession, batch_id: int, task_id: int) -> BatchTask:
+    task = await get_task(session, batch_id, task_id)
+    if task.status not in (BatchTaskStatus.failed, BatchTaskStatus.draft):
+        raise ValueError("Можно повторить только задачи со статусом failed или draft")
+    task.status = BatchTaskStatus.pending
+    task.error = None
+    task.itsm_request_id = None
+    await session.commit()
+    await session.refresh(task)
+    return task
+
+
+async def skip_task(session: AsyncSession, batch_id: int, task_id: int) -> BatchTask:
+    task = await get_task(session, batch_id, task_id)
+    if task.status == BatchTaskStatus.done:
+        raise ValueError("Нельзя пропустить выполненную задачу")
+    task.status = BatchTaskStatus.skipped
+    task.error = None
+    await session.commit()
+    await session.refresh(task)
+    return task
 
 
 def ensure_batch_tasks_editable(batch: Batch) -> None:

@@ -7,7 +7,7 @@ from sse_starlette.sse import EventSourceResponse
 from app.db.models import BatchStatus
 from app.db.session import get_session
 from app.schemas.batch import BatchCreate, BatchDetail, BatchRead, BatchUpdate
-from app.schemas.run import BatchRunResponse
+from app.schemas.run import BatchRunRequest, BatchRunResponse
 from app.services import crud
 from app.services.batch_run import start_batch_run
 from app.services.redis_pubsub import stream_batch_events
@@ -78,6 +78,7 @@ async def delete_batch(
 @router.post("/{batch_id}/run", response_model=BatchRunResponse)
 async def run_batch_endpoint(
     batch_id: int,
+    payload: BatchRunRequest = BatchRunRequest(),
     session: AsyncSession = Depends(get_session),
 ) -> BatchRunResponse:
     try:
@@ -87,7 +88,7 @@ async def run_batch_endpoint(
     except crud.BatchIsRunningError as error:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(error)) from error
 
-    run_batch.delay(batch.id)
+    run_batch.delay(batch.id, stop_on_error=payload.stop_on_error, dry_run=payload.dry_run)
     return BatchRunResponse(status="started", batch_id=batch.id)
 
 

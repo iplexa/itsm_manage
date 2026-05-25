@@ -1,19 +1,101 @@
+import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Play, AlertCircle } from "lucide-react";
+import { ArrowLeft, Play, AlertCircle, X } from "lucide-react";
 import { fetchBatch, runBatch } from "../api/batches";
-import { createTask, deleteTask } from "../api/tasks";
+import { createTask, deleteTask, retryTask, skipTask } from "../api/tasks";
 import StatusBadge from "../components/StatusBadge";
 import TaskTable from "../components/TaskTable";
 import TemplatePanel from "../components/TemplatePanel";
 import AIImportPanel from "../components/AIImportPanel";
 import type { TaskCreate } from "../types/task";
 
+function RunModal({
+  batchName,
+  taskCount,
+  onConfirm,
+  onClose,
+}: {
+  batchName: string;
+  taskCount: number;
+  onConfirm: (dryRun: boolean, stopOnError: boolean) => void;
+  onClose: () => void;
+}) {
+  const [dryRun, setDryRun] = useState(false);
+  const [stopOnError, setStopOnError] = useState(true);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm mx-4 p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-base font-semibold text-gray-900">Запустить батч</h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+            <X size={18} />
+          </button>
+        </div>
+
+        <p className="text-sm text-gray-600 mb-5">
+          <span className="font-medium">{batchName}</span> — {taskCount} задач
+        </p>
+
+        <div className="space-y-3 mb-6">
+          <label className="flex items-start gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={dryRun}
+              onChange={(e) => setDryRun(e.target.checked)}
+              className="mt-0.5 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+            />
+            <div>
+              <div className="text-sm font-medium text-gray-900">Dry-run</div>
+              <div className="text-xs text-gray-400">
+                Имитация без реальных запросов в ITSM
+              </div>
+            </div>
+          </label>
+
+          <label className="flex items-start gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={stopOnError}
+              onChange={(e) => setStopOnError(e.target.checked)}
+              className="mt-0.5 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+            />
+            <div>
+              <div className="text-sm font-medium text-gray-900">Остановить при ошибке</div>
+              <div className="text-xs text-gray-400">
+                Прервать батч после первой неудачной задачи
+              </div>
+            </div>
+          </label>
+        </div>
+
+        <div className="flex gap-2">
+          <button
+            onClick={() => onConfirm(dryRun, stopOnError)}
+            className="flex-1 flex items-center justify-center gap-1.5 rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700"
+          >
+            <Play size={13} />
+            {dryRun ? "Запустить (dry-run)" : "Запустить"}
+          </button>
+          <button
+            onClick={onClose}
+            className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50"
+          >
+            Отмена
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function BatchEditor() {
   const { id } = useParams<{ id: string }>();
   const batchId = Number(id);
   const navigate = useNavigate();
   const qc = useQueryClient();
+  const [showRunModal, setShowRunModal] = useState(false);
 
   const { data: batch, isLoading, error } = useQuery({
     queryKey: ["batch", batchId],
@@ -23,12 +105,23 @@ export default function BatchEditor() {
   });
 
   const runMut = useMutation({
-    mutationFn: () => runBatch(batchId),
+    mutationFn: ({ dryRun, stopOnError }: { dryRun: boolean; stopOnError: boolean }) =>
+      runBatch(batchId, dryRun, stopOnError),
     onSuccess: () => navigate(`/batches/${batchId}/run`),
   });
 
   const deleteMut = useMutation({
     mutationFn: (taskId: number) => deleteTask(batchId, taskId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["batch", batchId] }),
+  });
+
+  const retryMut = useMutation({
+    mutationFn: (taskId: number) => retryTask(batchId, taskId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["batch", batchId] }),
+  });
+
+  const skipMut = useMutation({
+    mutationFn: (taskId: number) => skipTask(batchId, taskId),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["batch", batchId] }),
   });
 
@@ -63,13 +156,26 @@ export default function BatchEditor() {
   }
 
   const isRunning = batch.status === "running";
-  const canRun = batch.status !== "running" && batch.tasks.length > 0;
+  const isDraft = batch.status === "draft";
+  const canRun = !isRunning && batch.tasks.length > 0;
   const sortedTasks = [...batch.tasks].sort(
     (a, b) => a.sort_order - b.sort_order || a.id - b.id,
   );
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
+      {showRunModal && (
+        <RunModal
+          batchName={batch.name}
+          taskCount={batch.tasks_count}
+          onConfirm={(dryRun, stopOnError) => {
+            setShowRunModal(false);
+            runMut.mutate({ dryRun, stopOnError });
+          }}
+          onClose={() => setShowRunModal(false)}
+        />
+      )}
+
       {/* Header */}
       <header className="bg-white border-b border-gray-200 px-6 py-3 flex items-center gap-4 shrink-0">
         <button
@@ -103,11 +209,7 @@ export default function BatchEditor() {
           </button>
         ) : (
           <button
-            onClick={() => {
-              if (confirm(`Запустить батч «${batch.name}» (${batch.tasks_count} задач)?`)) {
-                runMut.mutate();
-              }
-            }}
+            onClick={() => setShowRunModal(true)}
             disabled={!canRun || runMut.isPending}
             className="flex items-center gap-1.5 rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           >
@@ -136,7 +238,13 @@ export default function BatchEditor() {
             tasks={sortedTasks}
             showStatus={batch.status !== "draft"}
             onDelete={
-              !isRunning ? (taskId) => deleteMut.mutate(taskId) : undefined
+              isDraft ? (taskId) => deleteMut.mutate(taskId) : undefined
+            }
+            onRetry={
+              !isDraft && !isRunning ? (taskId) => retryMut.mutate(taskId) : undefined
+            }
+            onSkip={
+              !isDraft && !isRunning ? (taskId) => skipMut.mutate(taskId) : undefined
             }
           />
         </main>

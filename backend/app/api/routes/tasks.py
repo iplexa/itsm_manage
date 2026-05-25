@@ -61,3 +61,31 @@ async def delete_task(
     except crud.BatchIsRunningError as error:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(error)) from error
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post("/{task_id}/retry", response_model=TaskRead)
+async def retry_task(
+    batch_id: int,
+    task_id: int,
+    session: AsyncSession = Depends(get_session),
+) -> TaskRead:
+    try:
+        return await crud.retry_task(session, batch_id, task_id)
+    except crud.NotFoundError as error:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(error)) from error
+    except ValueError as error:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(error)) from error
+
+
+@router.post("/{task_id}/skip", response_model=TaskRead)
+async def skip_task(
+    batch_id: int,
+    task_id: int,
+    session: AsyncSession = Depends(get_session),
+) -> TaskRead:
+    try:
+        return await crud.skip_task(session, batch_id, task_id)
+    except crud.NotFoundError as error:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(error)) from error
+    except ValueError as error:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(error)) from error
