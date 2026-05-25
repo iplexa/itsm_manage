@@ -4,6 +4,8 @@
 
 Сейчас реализована Фаза 1: инфраструктурный каркас, FastAPI endpoint `/health`, SQLAlchemy async, Alembic, модели `Batch` и `BatchTask`, PostgreSQL, Redis, Celery worker и минимальный frontend на Vite.
 
+Фаза 2 добавляет CRUD API для батчей и задач.
+
 ## Требования
 
 - Docker
@@ -35,6 +37,29 @@ curl http://localhost:8000/health
 ```json
 {"status":"ok"}
 ```
+
+## CRUD API
+
+Батчи:
+
+```http
+GET /api/batches
+POST /api/batches
+GET /api/batches/{batch_id}
+PATCH /api/batches/{batch_id}
+DELETE /api/batches/{batch_id}
+```
+
+Задачи батча:
+
+```http
+GET /api/batches/{batch_id}/tasks
+POST /api/batches/{batch_id}/tasks
+PATCH /api/batches/{batch_id}/tasks/{task_id}
+DELETE /api/batches/{batch_id}/tasks/{task_id}
+```
+
+Если батч находится в статусе `running`, изменение задач возвращает `409 Conflict`.
 
 ## Миграции
 

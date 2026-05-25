@@ -1,11 +1,14 @@
 from fastapi import FastAPI
 
+from app.api.routes import batches, tasks
 from app.core.logging import configure_logging
 
 
 configure_logging()
 
 app = FastAPI(title="ITSM Manage API")
+app.include_router(batches.router, prefix="/api")
+app.include_router(tasks.router, prefix="/api")
 
 
 @app.get("/health")
